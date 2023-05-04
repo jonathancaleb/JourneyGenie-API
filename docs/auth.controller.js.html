@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>JSDoc: Source: auth.controller.js</title>
+
+    <script src="scripts/prettify/prettify.js"> </script>
+    <script src="scripts/prettify/lang-css.js"> </script>
+    <!--[if lt IE 9]>
+      <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+    <link type="text/css" rel="stylesheet" href="styles/prettify-tomorrow.css">
+    <link type="text/css" rel="stylesheet" href="styles/jsdoc-default.css">
+</head>
+
+<body>
+
+<div id="main">
+
+    <h1 class="page-title">Source: auth.controller.js</h1>
+
+    
+
+
+
+    
+    <section>
+        <article>
+            <pre class="prettyprint source linenums"><code>const {
+    BadRequestError,
+    UnauthenticatedError,
+    UnauthorizedError,
+} = require('../utils/errors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+require('express-async-error');
+
+const mongoose = require('mongoose');
+
+// Models
+const { BlacklistedToken, AuthCode } = require('../models/token.model');
+const {
+    User,
+    Status,
+    Enduser,
+    Rider,
+    Admin,
+} = require('../models/users.model');
+const Password = require('../models/password.model');
+
+// Utils
+const config = require('../utils/config');
+const asyncWrapper = require('../utils/async_wrapper');
+const sendEmail = require('../utils/email');
+const { getAuthCodes, getAuthTokens } = require('../utils/token');
+const Vehicle = require('../models/vehicle.model');
+
+/**
+ * Handle existing unverified user.
+ * it sends new verification email to user
+ * @param {MongooseObject} user - Mongoose user object
+ * @returns {string} access_token, refresh_token - JWT tokens
+ */
+const handleUnverifiedUser = async function (user) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Get verification code
+            const { verification_code } = await getAuthCodes(
+                user.id,
+                'verification'
+            );
+
+            // Send verification email
+            sendEmail({
+                email: user.email,
+                subject: 'Account Verification',
+                message: 'This is your verification code: ' + verification_code,
+            });
+
+            // Get access token
+            const { access_token } = await getAuthTokens(
+                user._id,
+                'verification'
+            );
+
+            resolve({ access_token });
+        } catch (error) {
+            reject(error);
+        }
+    });
+};
+
+/**
+ * Handle existing user
+ *
+ * @param {MongooseObject} user - Mongoose user object
+ * @returns {function} - Express middleware function
+ * @throws {BadRequestError} - If user is already verified
+ * */
+const handleExistingUser = function (user) {
+    return async function (req, res, next) {
+        const existing_user = user.toJSON({ virtuals: true });
+
+        console.log(existing_user);
+        // If user is not verified - send verification email
+        if (!existing_user.status.isVerified) {
+            const { access_token } = await handleUnverifiedUser(existing_user);
+
+            // Return access token
+            res.status(200).json({ success: true, data: { access_token } });
+        } else {
+            next(new BadRequestError('User already exists'));
+        }
+    };
+};
+
+/**
+ * Handle Unverified superAdmin
+ * It sends verification code to user, admin1 and admin2 then returns access token
+ * @param {MongooseObject} user - Mongoose user object
+ *
+ * @returns {string} access_token - JWT tokens
+ *
+ * @throws {BadRequestError} - If user is already verified
+ * */
+const handleUnverifiedSuperAdmin = async function (user) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            // Get verification code
+            const { activation_code1, activation_code2, activation_code3 } =
+                await getAuthCodes(user.id, 'su_activation');
+
+            // Send first activation code to new user
+            sendEmail({
+                email: user.email,
+                subject: 'Account Verification',
+                message: 'This is your activation code: ' + activation_code1,
+            });
+
+            // Send second activation code to first admin
+            sendEmail({
+                email: config.SUPER_ADMIN_EMAIL1,
+                subject: 'Account Verification for new superadmin',
+                message: `New superadmin account creation for ${user.email}. This is your activation code: ${activation_code2}`,
+            });
+
+            // Send third activation code to second admin
+            sendEmail({
+                email: config.SUPER_ADMIN_EMAIL2,
+                subject: 'Account Verification for new superadmin',
+                message: `New superadmin account creation for ${user.email}. This is your activation code: ${activation_code3}`,
+            });
+
+            // Get access token
+            const { access_token } = await getAuthTokens(
+                user._id,
+                'verification'
+            );
+
+            resolve({ access_token });
+        } catch (error) {
+            reject(error);
+        }
+    });
+};
+
+/**
+ * Enduser signup
+ * @description - Creates a new enduser
+ * @route POST /api/v1/auth/signup/enduser
+ * @access Public
+ *
+ * @param {string} firstname - Firstname of user
+ * @param {string} lastname - Lastname of user
+ * @param {string} email - Email of user
+ * @param {string} password - Password of user
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ * @returns {string} data.refresh_token - JWT refresh token
+ * @returns {string} access_token, refresh_token - JWT tokens
+ *
+ * @throws {BadRequestError} - If user already exists
+ * @throws {BadRequestError} - If user already exists and is verified
+ * @throws {BadRequestError} - If role is superadmin
+ */
+const userSignup = async (req, res, next) => {
+    let {
+        firstname,
+        lastname,
+        email,
+        password,
+        role,
+        phone,
+        address,
+        city,
+        state,
+    } = req.body;
+
+    if (!role) role = 'enduser';
+
+    // Check if role is superadmin
+    if (role === 'superadmin') return next(new BadRequestError('Invalid role'));
+
+    const existing_user = await User.findOne({ email }).populate('status');
+
+    // Check if user already exists
+    if (existing_user) {
+        await handleExistingUser(existing_user)(req, res, next);
+        return;
+    }
+
+    // Use mongoose transaction
+    const session = await mongoose.startSession();
+    let user;
+    await session.withTransaction(async () => {
+        // Create user
+        let _user = await User.create(
+            [
+                {
+                    firstname,
+                    lastname,
+                    email,
+                    role,
+                },
+            ],
+            { session }
+        ).then((user) => user[0]);
+
+        // Create user info
+        if (role === 'enduser')
+            await Enduser.create(
+                [{ user: _user._id, phone, city, address, state }],
+                { session }
+            );
+
+        // Create admin info
+        if (role === 'admin')
+            await Admin.create([{ user: user._id }], { session });
+
+        await session.commitTransaction();
+        session.endSession();
+    });
+
+    Password.create({ password, user: user._id });
+    Status.create({ user: user._id, isActive: true });
+
+    // Get auth tokens
+    const { access_token } = await handleUnverifiedUser(user);
+
+    res.status(201).json({
+        success: true,
+        data: {
+            access_token,
+            user: {
+                id: user._id,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+            },
+        },
+    });
+};
+
+/**
+ * Rider signup
+ * @description - Creates a new rider
+ * @route POST /api/v1/auth/signup/rider
+ *
+ * @param {string} firstname - Firstname of user
+ * @param {string} lastname - Lastname of user
+ * @param {string} email - Email of user
+ * @param {string} password - Password of user
+ * @param {string} phone - Phone number of user
+ * @param {string} address - Address of user
+ * @param {string} city - City of user
+ * @param {string} state - State of user
+ * @param {string} referral - Referral code of user
+ *
+ * // Vehicle details
+ * @param {string} model - Model of vehicle
+ * @param {string} color - Color of vehicle
+ * @param {string} license - License of vehicle
+ * @param {string} year - Year of vehicle
+ * @param {string} manufacturer - Manufacturer of vehicle
+ * @param {string} plate_number - Plate number of vehicle
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ *
+ * @throws {BadRequestError} - If user already exists and is verified
+ * */
+const riderSignup = async (req, res, next) => {
+    const { personal_details, vehicle_details } = req.body;
+    const { email, password } = personal_details;
+
+    const role = 'rider';
+
+    const existing_user = await User.findOne({ email }).populate('status');
+
+    if (existing_user) {
+        await handleExistingUser(existing_user)(req, res, next);
+        return;
+    }
+
+    // Use mongoose transaction
+    const session = await mongoose.startSession();
+    let user, vehicle, rider;
+    await session.withTransaction(async () => {
+        // Create user
+        user = await User.create([{ ...personal_details, role }], {
+            session,
+        }).then((user) => user[0]);
+
+        console.log(user);
+        // Create Rider info
+        rider = await Rider.create([{ user: user._id, ...personal_details }], {
+            session,
+        }).then((rider) => rider[0]);
+
+        // Create Vehicle info
+        if (rider.hasVehicle) {
+            vehicle = await Vehicle.create(
+                [{ rider: rider._id, ...vehicle_details }],
+                {
+                    session,
+                }
+            ).then((vehicle) => {
+                return vehicle[0];
+            });
+
+            await rider.updateOne({ $push: { vehicles: vehicle._id } }, { session });
+        }
+
+        await session.commitTransaction();
+        session.endSession();
+    });
+
+    console.log(user);
+    console.log(rider);
+    console.log(vehicle);
+
+    Password.create({ password, user: user._id });
+    Status.create({ user: user._id });
+
+    // Get auth tokens
+    const { access_token } = await handleUnverifiedUser(user);
+
+    res.status(201).json({
+        success: true,
+        data: {
+            access_token,
+            user: {
+                id: user._id,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+            },
+        },
+    });
+};
+
+/**
+ * Email verification
+ * @description - Verifies user email
+ * @route POST /api/v1/auth/verifyemail
+ * @access Private
+ *
+ * @param {string} email - Email of user
+ * @param {string} verification_code - Verification code
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * @throws {BadRequestError} - If user is already verified
+ * @throws {BadRequestError} - If verification code is invalid
+ */
+const verifyEmail = async (req, res, next) => {
+    const { verification_code } = req.body;
+
+    const user = await User.findOne({ email: req.user.email }).populate(
+        'status'
+    );
+
+    console.log(user);
+    // Check if user exists
+    if (!user) return next(new BadRequestError('User does not exist'));
+
+    // Check if user is verified
+    if (user.status.isVerified)
+        return next(new BadRequestError('User is already verified'));
+
+    // Check if verification code is valid
+    const auth_code = await AuthCode.findOne({
+        user: user._id,
+        verification_code,
+    });
+
+    console.log(auth_code);
+
+    if (!auth_code)
+        return next(new BadRequestError('Invalid verification code'));
+
+    // Remove verification code
+    await auth_code.updateOne({ verification_code: null });
+
+    // Verify user
+    await user.status.updateOne({ isVerified: true });
+
+    // Blacklist access token
+    BlacklistedToken.create({ token: req.headers.authorization.split(' ')[1] });
+
+    res.status(200).json({ success: true, data: {} });
+};
+
+/**
+ * Resend verification email to user
+ * @description - Resends verification email to user
+ * @route GET /api/v1/auth/verifyemail
+ * @access Public
+ *
+ * @param {string} email - Email of user
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * @throws {BadRequestError} - If user is already verified
+ */
+const resendVerificationEmail = async (req, res, next) => {
+    const email = req.params.email,
+        user = await User.findOne({ email }).populate('status');
+
+    if (!user) return next(new BadRequestError('User does not exist'));
+
+    if (user.status.isVerified)
+        return next(new BadRequestError('User is already verified'));
+
+    const { access_token } = await handleUnverifiedUser(user, 'verification');
+
+    res.status(200).json({ success: true, data: { access_token } });
+};
+
+/**
+ * Login
+ * @description - Logs in user
+ * @route POST /api/v1/auth/login
+ * @access Public
+ *
+ * @param {string} email - Email of user
+ * @param {string} password - Password of user
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ * @returns {string} data.refresh_token - JWT refresh token
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * @throws {BadRequestError} - If user is not verified
+ * @throws {BadRequestError} - If user is not active
+ * @throws {BadRequestError} - If password is incorrect
+ */
+const login = async (req, res, next) => {
+    const { email, password } = req.body;
+
+    const user = await User.findOne({ email }).populate('status password');
+    console.log(user);
+    console.log(user.toJSON({ virtuals: true }));
+
+    // Check if user exists
+    if (!user) return next(new BadRequestError('User does not exist'));
+
+    // Check if user is verified
+    if (!user.status.isVerified)
+        return next(new BadRequestError('User is not verified'));
+
+    // Check if user is active
+    if (!user.status.isActive)
+        return next(new BadRequestError('User is not active'));
+
+    // Check if password is correct
+    const password_match = await bcrypt.compare(
+        password,
+        user.password.password
+    );
+    if (!password_match) return next(new BadRequestError('Invalid password'));
+
+    // Get auth tokens
+    const { access_token, refresh_token } = await getAuthTokens(user._id);
+
+    res.status(200).json({
+        success: true,
+        data: {
+            access_token,
+            refresh_token,
+            user: {
+                id: user._id,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+            },
+        },
+    });
+};
+
+/**
+ * Logout user
+ * @description - Logs out user
+ * @route POST /api/v1/auth/logout
+ * @access Private
+ *
+ * @param {string} refresh_token - Refresh token
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ *
+ * @throws {BadRequestError} - If refresh token is not provided
+ * @throws {BadRequestError} - If access token is not provided
+ */
+const logout = async (req, res, next) => {
+    const { refresh_token } = req.body;
+
+    // Get access token from header
+    const access_token = req.headers.authorization.split(' ')[1];
+
+    // Check if refresh token exists
+    if (!refresh_token)
+        return next(new BadRequestError('Refresh token is required'));
+
+    // Check if access token exists
+    if (!access_token)
+        return next(new BadRequestError('Access token is required'));
+
+    // Blacklist jwt tokens
+    BlacklistedToken.create({ token: access_token });
+    BlacklistedToken.create({ token: refresh_token });
+
+    res.status(200).json({ success: true, data: {} });
+};
+
+/**
+ * Forgot password
+ * @description - Sends password reset code to user
+ * @route POST /api/v1/auth/forgotpassword
+ * @access Public
+ *
+ * @param {string} email - Email of user
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * */
+const forgotPassword = async (req, res, next) => {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email }).populate('status');
+
+    // Check if user exists
+    if (!user) return next(new BadRequestError('User does not exist'));
+
+    // Generate password reset code
+    const password_reset_code = await getAuthCodes(user._id, 'password_reset');
+
+    // Send password reset email
+    sendEmail({
+        email: user.email,
+        subject: 'Password Reset',
+        text: `Your password reset code is ${password_reset_code}`,
+    });
+
+    // Get auth tokens
+    const { access_token } = await getAuthTokens(user._id, 'password_reset');
+
+    res.status(200).json({
+        success: true,
+        message: 'Password reset code sent to users email',
+        data: { access_token },
+    });
+};
+
+/**
+ * Reset password
+ * If request is made by superAdmin, account will require activation aftewards to login
+ * @description - Resets user password
+ * @route PATCH /api/v1/auth/resetpassword
+ * @access Private
+ *
+ * @param {string} password_reset_code - Password reset code
+ * @param {string} new_password - New password
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * @throws {BadRequestError} - If password reset code is invalid
+ */
+const resetPassword = async (req, res, next) => {
+    const { password_reset_code, new_password } = req.body;
+
+    const user = await User.findOne({ email: req.user.email }).populate(
+        'status password'
+    );
+
+    // Check if password reset code is valid
+    const password_reset_code_match = await AuthCode.findOne({
+        user: user._id,
+        password_reset_code,
+    });
+    if (!password_reset_code_match)
+        return next(new BadRequestError('Invalid password reset code'));
+
+    // Hash new password
+    const salt = await bcrypt.genSalt(10);
+    const hashed_password = await bcrypt.hash(new_password, salt);
+
+    // Update password
+    await Password.findOneAndUpdate(
+        { user: user._id },
+        { password: hashed_password }
+    );
+
+    if (user.role === 'superadmin') {
+        user.status.isActive = false;
+        user.save();
+
+        const { access_token } = await handleUnverifiedSuperAdmin(user);
+
+        return res.status(200).json({
+            success: true,
+            message:
+                'Password reset successful. Please Activate your admin account',
+            data: { access_token },
+        });
+    }
+
+    // Delete password reset code
+    // AuthCode.findOneAndUpdate(
+    //     { user: user._id },
+    //     { password_reset_code: null }
+    // );
+
+    // Blacklist jwt tokens
+    // BlacklistedToken.create({ token: req.headers.authorization.split(' ')[1] });
+
+    return res.status(200).json({ success: true, data: {} });
+};
+
+/**
+ * Verify email
+ * @description - Verifies user email
+ * @route PATCH /api/v1/auth/verifyemail
+ * @access Private
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ *
+ * */
+const getLoggedInUserData = async (req, res, next) => {
+    const user = await User.findOne({ email: req.user.email });
+
+    res.status(200).json({
+        success: true,
+        data: {
+            user: {
+                id: user._id,
+                firstname: user.firstname,
+                lastname: user.lastname,
+                email: user.email,
+            },
+        },
+    });
+};
+
+// Admin controllers
+/**
+ * Super admin signup
+ * @description - Creates super admin
+ * @route POST /api/v1/auth/signup/superadmin
+ *
+ * @param {string} firstname - Firstname of user
+ * @param {string} lastname - Lastname of user
+ * @param {string} email - Email of user
+ * @param {string} password - Password of user
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ * @returns {string} data.access_token - JWT access token
+ * @returns {string} data.user - User object
+ * @returns {string} data.user.id - User id
+ * @returns {string} data.user.firstname - User firstname
+ * @returns {string} data.user.lastname - User lastname
+ * @returns {string} data.user.email - User email
+ *
+ * @throws {BadRequestError} - If user already exists
+ * @throws {BadRequestError} - If missing required fields
+ */
+const superAdminSignup = async (req, res, next) => {
+    const { firstname, lastname, email, password } = req.body;
+
+    if (!firstname || !lastname || !email || !password) {
+        return next(new BadRequestError('All fields are required'));
+    }
+
+    // Check if user exists
+    const existing_user = await User.findOne({ email }).populate('status');
+
+    if (existing_user) {
+        // If Admin exists and is not verified
+        if (!existing_user.status.isVerified) {
+            const { access_token } = await handleUnverifiedSuperAdmin(
+                existing_user
+            );
+
+            return res.status(200).json({
+                success: true,
+                message:
+                    'Super admin account created. Please verify your email',
+                data: { access_token },
+            });
+        }
+
+        // If Admin exists and is verified
+        return next(new BadRequestError('User already exists'));
+    }
+
+    // Create new user
+    const admin = await User.create({
+        firstname,
+        lastname,
+        email,
+        role: 'superadmin',
+    });
+
+    Password.create({ user: admin._id, password });
+    Status.create({ user: admin._id });
+
+    // Get auth tokens
+    const { access_token } = await handleUnverifiedSuperAdmin(admin);
+
+    res.status(201).json({
+        success: true,
+        data: {
+            access_token,
+            user: {
+                id: admin._id,
+                firstname: admin.firstname,
+                lastname: admin.lastname,
+                email: admin.email,
+            },
+        },
+    });
+};
+
+/**
+ * Activate super admin
+ * @description - Activates super admin account
+ * @route POST /api/v1/auth/activate/superadmin
+ *
+ * @param {string} activation_code1 - First part of activation code
+ * @param {string} activation_code2 - Second part of activation code
+ * @param {string} activation_code3 - Third part of activation code
+ *
+ * @returns {string} success - Success message
+ * @returns {string} data - Data object
+ *
+ * @throws {BadRequestError} - If user does not exist
+ * @throws {BadRequestError} - If activation code is invalid
+ * @throws {BadRequestError} - If all fields are not provided
+ * */
+const activateSuperAdmin = async (req, res, next) => {
+    const { activation_code1, activation_code2, activation_code3 } = req.body;
+
+    if (!activation_code1 || !activation_code2 || !activation_code3) {
+        return next(new BadRequestError('All fields are required'));
+    }
+
+    const activation_code = `${activation_code1}-${activation_code2}-${activation_code3}`;
+
+    // Compare activation code
+    const auth_code = await AuthCode.findOne({
+        user: req.user.id,
+        activation_code,
+    });
+    if (!auth_code) {
+        return next(new BadRequestError('Invalid activation code'));
+    }
+
+    // Update user status
+    Status.findOneAndUpdate(
+        { user: req.user.id },
+        { isVerified: true, isActive: true },
+        { new: true }
+    );
+
+    // // Delete activation code
+    AuthCode.findOneAndUpdate({ user: req.user.id }, { activation_code: null });
+
+    // // Blacklist jwt tokens
+    BlacklistedToken.create({ token: req.headers.authorization.split(' ')[1] });
+
+    res.status(200).json({ success: true, data: {} });
+};
+
+module.exports = {
+    enduserSignup: userSignup,
+    riderSignup,
+    superAdminSignup,
+    activateSuperAdmin,
+    login,
+    logout,
+    forgotPassword,
+    resetPassword,
+    verifyEmail,
+    resendVerificationEmail,
+    getLoggedInUserData,
+};
+</code></pre>
+        </article>
+    </section>
+
+
+
+
+</div>
+
+<nav>
+    <h2><a href="index.html">Home</a></h2><h3>Global</h3><ul><li><a href="global.html#activateSuperAdmin">activateSuperAdmin</a></li><li><a href="global.html#activateUserAccount">activateUserAccount</a></li><li><a href="global.html#activateVehicle">activateVehicle</a></li><li><a href="global.html#addUserAccount">addUserAccount</a></li><li><a href="global.html#addVehicle">addVehicle</a></li><li><a href="global.html#deactivateUserAccount">deactivateUserAccount</a></li><li><a href="global.html#deactivateVehicle">deactivateVehicle</a></li><li><a href="global.html#forgotPassword">forgotPassword</a></li><li><a href="global.html#getRidersVehicles">getRidersVehicles</a></li><li><a href="global.html#getUserAccountData">getUserAccountData</a></li><li><a href="global.html#getVehicleData">getVehicleData</a></li><li><a href="global.html#handleExistingUser">handleExistingUser</a></li><li><a href="global.html#handleUnverifiedSuperAdmin">handleUnverifiedSuperAdmin</a></li><li><a href="global.html#handleUnverifiedUser">handleUnverifiedUser</a></li><li><a href="global.html#login">login</a></li><li><a href="global.html#removeVehicle">removeVehicle</a></li><li><a href="global.html#resendVerificationEmail">resendVerificationEmail</a></li><li><a href="global.html#riderSignup">riderSignup</a></li><li><a href="global.html#superAdminSignup">superAdminSignup</a></li><li><a href="global.html#updateUserAccount">updateUserAccount</a></li><li><a href="global.html#updateVehicleData">updateVehicleData</a></li><li><a href="global.html#userSignup">userSignup</a></li></ul>
+</nav>
+
+<br class="clear">
+
+<footer>
+    Documentation generated by <a href="https://github.com/jsdoc/jsdoc">JSDoc 4.0.0</a> on Tue Dec 27 2022 13:07:19 GMT+0100 (West Africa Standard Time)
+</footer>
+
+<script> prettyPrint(); </script>
+<script src="scripts/linenumber.js"> </script>
+</body>
+</html>

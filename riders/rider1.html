@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <link rel="stylesheet" href="./style.css">
+</head>
+
+<body>
+    <button class="ws"> Start socket</button>
+    <button class="login">Login</button>
+    <button class="start-ws">Start WebSocket</button>
+    <button class="send-mesage">Send Message</button>
+    <button class="go-online">Go online</button>
+    <button class="go-offline">Go offline</button>
+    <button class="add-vehicle">Add Vehicle</button>
+    <button class="get-location">Get Location</button>
+    <button class="update-location">Update Location</button>
+    <button class="call">Call User</button>
+    <div class="chat-area">
+        <input type="text" class="target-mail" placeholder="Target email"> </input>
+        <input type="text" class="message-content"> </input>
+        <button class="send-message">Send Message</button>
+        <button class="initiate-chat">Initiate Chat</button>
+        <button class="get-previous-messages">Get previous messages</button>
+    </div>
+    <!-- confirmation alert window -->
+    <div class="alert show" role="alert">
+        <strong>Success!</strong>
+        <button class="yes">Yes</button>
+        <button class="no">No</button>
+        <button type="button" class="btn-close">X</button>
+    </div>
+
+    <div class="call-dialog hide">
+        <strong>Incoming call</strong>
+        <button class="accept-call"> Accept </button>
+        <button class="reject-call">Reject</button>
+    </div>
+
+    <!-- Web socket with ws-->
+    <!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/3.1.2/socket.io.js"></script> -->
+    <!-- Axios -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
+
+    <!-- Buttons -->
+    <script>
+        const loginButton = document.querySelector('.login');
+        const sendMessageButton = document.querySelector('.send-mesage');
+        const goOnlineButton = document.querySelector('.go-online');
+        const goOfflineButton = document.querySelector('.go-offline');
+        const addVehicleButton = document.querySelector('.add-vehicle');
+
+        addVehicleButton.addEventListener('click', () => {
+            axios.post('http://localhost:5000/api/v1/vehicle/add', {
+                name: 'Toyota',
+                model: 'Corolla',
+                year: 2010,
+                color: 'Black',
+                manufacturer: 'Toyota',
+                plate_number: 'KCK 123',
+            }, {
+                headers: {
+                    Authorization: `Bearer ${localStorage.getItem(`access_token:${email}`)}`
+                }
+            }).then((res) => {
+                console.log(res.data)
+            }).catch((err) => {
+                console.log(err)
+            })
+        })
+
+        sendMessageButton.addEventListener('click', () => {
+            console.log('Sending message')
+            socket.emit('message', "Hi from the client")
+        })
+
+        const email = 'cruiserider24@gmail.com'
+        const serverURL = 'http://localhost:5000/api/v1';
+        function login() {
+            axios.post(`${serverURL}/auth/login`, {
+                email,
+                password: 'testpassword'
+            }).then((res) => {
+                console.log(res.data)
+                // Extract access token
+                const { access_token } = res.data.data;
+                localStorage.setItem(`access_token:${email}`, access_token);
+            }).catch((err) => {
+                console.log(err)
+            })
+        }
+        loginButton.addEventListener('click', login)
+
+        
+    </script>
+
+    <script>
+        const updateLocationButton = document.querySelector('.update-location');
+        const getLocationButton = document.querySelector('.get-location');
+        const callButton = document.querySelector('.call');
+
+        async function getLocation() {
+            return new Promise((resolve, reject) => {
+                navigator.geolocation.getCurrentPosition(resolve, reject)
+            })
+        }
+
+        updateLocationButton.addEventListener('click', async () => {
+            const { longitude, latitude } = (await getLocation()).coords
+
+            console.log(`Longitude: ${longitude} | Latitude: ${latitude}`)
+            const data = {
+                location: {
+                    type: "Point",
+                    coordinates: [longitude, latitude]
+                },
+            }
+
+            socket.emit('update-location', data)
+        })
+
+        callButton.addEventListener('click', async () => {
+            console.log('Calling user')
+            const targetuser_email = 'cruiserider25@gmail.com'
+            const peer_id = '018412-lkasjd-f233u-42kj4-asd82-cruiserider24@gmail.com'
+            const data = { targetuser_email, peer_id }
+
+            socket.emit('call:request', data)
+        })
+
+        
+
+    </script>
+
+    <!-- Socket Controls -->
+    <script>
+        goOnlineButton.addEventListener('click', goOnline)
+        goOfflineButton.addEventListener('click', goOffline)
+
+        const server_url = 'http://localhost:5000/api/v1';
+        const axios_header = {
+            'Authorization': `Bearer ${localStorage.getItem(`access_token:${email}`)}`
+        }
+        async function goOnline() {
+
+            // Send request to server to go online
+            const { data } = await axios.post(`${server_url}/rider/online`, {}, {
+                headers: axios_header
+            })
+
+            console.log(data)
+        }
+
+        async function goOffline() {
+            // Send request to server to go offline
+            const { data } = await axios.post(`${server_url}/rider/offline`, {}, {
+                headers: axios_header
+            })
+
+            console.log(data)
+        }
+    </script>
+
+    <!-- Socket IO -->
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const callDialog = document.querySelector('.call-dialog');
+        const socket = io('http://localhost:5000', {
+            handshake: true,
+            auth: {
+                access_token: localStorage.getItem(`access_token:${email}`)
+            },
+
+            query: {
+                access_token: localStorage.getItem(`access_token:${email}`)
+            }
+        });
+
+        function start() {
+            socket.on('connection', () => {
+                console.log('Connected to server');
+            })
+
+            socket.on('disconnect', () => {
+                console.log('Connection closed');
+                setTimeout(start, 5000)
+            })
+
+            socket.on('success', (data) => {
+                console.log('[success] ');
+                console.log(data);
+            })
+
+            socket.on('error', (data) => {
+                console.log('[error] ' + data);
+            })
+
+            socket.on('call:incoming', (data) => {
+                console.log('[call:incoming]')
+                console.log(data)
+                callDialog.classList.remove('hide')
+                callDialog.classList.add('show')
+
+                data = { peer_id: '018412-lkasjd-f233u-42kj4-asd82-cruiserider24@gmail.com' }
+
+                const acceptButton = document.querySelector('.accept-call');
+                const rejectButton = document.querySelector('.reject-call');
+
+                function acceptCall() {
+                    console.log('Accepting call')
+                    socket.emit('call:request:response', data)
+                    callDialog.classList.remove('show')
+                    callDialog.classList.add('hide')
+
+                    acceptButton.removeEventListener('click', acceptCall)
+                    rejectButton.removeEventListener('click', rejectCall)
+                }
+
+                function rejectCall() {
+                    console.log('Rejecting call')
+                    socket.emit('call:request:response', null)
+                    callDialog.classList.remove('show')
+                    callDialog.classList.add('hide')
+
+                    acceptButton.removeEventListener('click', acceptCall)
+                    rejectButton.removeEventListener('click', rejectCall)
+                }
+
+                acceptButton.addEventListener('click', acceptCall)
+
+                rejectButton.addEventListener('click', rejectCall)
+
+                setTimeout(() => {
+                    socket.emit('call:request:response', null)
+                    acceptButton.removeEventListener('click', acceptCall)
+                    rejectButton.removeEventListener('click', rejectCall)
+                }, 10000)
+            })
+
+            socket.on('call:timeout', (data) => {
+                console.log('[call:timeout] ')
+                console.log(data);
+                alert('Call timed out')
+            })
+
+            socket.on('call:success', (data) => {
+                console.log('[call:success] ')
+                console.log(data);
+                alert('Call success')
+            })
+
+            socket.on('ride:request', (data) => {
+                console.log('[ride:request] ')
+                console.log(data);
+
+                show_alert()
+            })
+
+            socket.on('ride:accepted', (data) => {
+                console.log('[ride:accepted] ')
+                console.log(data);
+            })
+
+            socket.on('ride:cancelled', (data) => {
+                console.log('[ride:cancelled] ')
+                console.log(data);
+
+                alert('Ride cancelled')
+            })
+
+            socket.on('rider:arrived', (data) => {
+                console.log('[rider:arrived] ')
+                console.log(data);
+                alert('Rider arrived')
+            })
+        }
+
+        start()
+    </script>
+
+    <!-- JS script -->
+    <script src="./js/script.js"></script>
+</body>
+
+</html>

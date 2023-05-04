@@ -1,0 +1,53 @@
+body, html {
+    /* background-color: #000000; */
+    color: #ffffff;
+    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    font-size: 14px;
+    line-height: 1.42857143;
+    margin: 0;
+    padding: 0;
+}
+
+.alert {
+    background-color: #765e5e;
+    width: fit-content;
+    padding: 20px;
+    /* height: 300px; */
+    color: black
+}
+
+.alert > button {
+    width: 50px;
+    height: 50px;
+}
+
+.show {
+    display: block;
+}
+
+.hide {
+    display: none;
+}
+
+.chat-area {
+    background-color: #765e5e;
+    width: fit-content;
+    padding: 20px;
+    display: flex;
+    flex-direction: column;
+    /* align-items: left;no */
+    /* height: 300px; */
+    color: black;
+}
+
+.chat-area .message-content {
+    display: flex;
+    flex-direction: column;
+    align-items: left;
+    /* height: 300px; */
+    color: black;
+    min-height: 50px;
+    margin: 10px 0px;
+    text-justify: left;
+    padding: 0;
+}
