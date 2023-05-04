@@ -14,6 +14,9 @@
         "start": "node ./src/server",
         "doc": "jsdoc -c jsdoc.json"
     },
+    "engines":{
+        "node": ">=14"
+    },
     "repository": {
         "type": "git",
         "url": "git+https://github.com/Tech-bro-association/cruise.git"
