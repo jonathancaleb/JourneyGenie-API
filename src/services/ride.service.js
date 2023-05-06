@@ -1,6 +1,7 @@
 const { Rider } = require("../models/users.model");
 const { clients } = require("../ws/clients");
-const { Ride, RideRequest } = require("../models/ride.model");
+const { Ride, RideRequest } = require("../models/common");
+//const { getActualCost } = require('./ride.service');
 const { RiderLocation } = require("../models/location.model");
 const config = require('../config')
 

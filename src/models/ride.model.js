@@ -1,7 +1,8 @@
 const mongoose = require('mongoose')
 const schema = mongoose.Schema
 const { Rider } = require('./users.model')
-const { getActualCost } = require('../services/ride.service')
+//const { Ride, RideRequest } = require("./common");
+//const { getActualCost } = require('../services/ride.service')
 
 // TODO: Add checks to enforce dynamic schema field required rules
 const rideReviewSchema = new schema({

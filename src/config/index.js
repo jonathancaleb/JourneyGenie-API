@@ -1,4 +1,16 @@
+require('dotenv').config();
+//console.log(process.env)
+
+
 const MONGO_URI = "mongodb+srv://sabilacalebjonathan:nethanel@cluster0.mls7anb.mongodb.net/?retryWrites=true&w=majority";
+/*const MONGO_URI = MONGO_URI;
+
+// Connect to the MongoDB database
+mongoose.connect(MONGO_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true
+  });*/
+
 const PORT = process.env.PORT || 5555;
 
 /* JWT TOKENS */
@@ -28,9 +40,10 @@ const EMAIL_HOST = process.env.EMAIL_HOST,
     SUPER_ADMIN_EMAIL2 = process.env.SUPER_ADMIN_EMAIL2;
 
 /* CRYPTO */
-const CRYPTO_ALGORITHM = process.env.CRYPTO_ALGORITHM,
-    CRYPTO_PASSWORD = process.env.CRYPTO_PASSWORD,
-    CRYPTO_IV = process.env.CRYPTO_IV;
+const CRYPTO_ALGORITHM = process.env.CRYPTO_ALGORITHM;
+const CRYPTO_PASSWORD = process.env.CRYPTO_PASSWORD;
+//console.log(process.env.CRYPTO_PASSWORD);
+const CRYPTO_IV = process.env.CRYPTO_IV;
 
 /* PAYSTACK */
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
