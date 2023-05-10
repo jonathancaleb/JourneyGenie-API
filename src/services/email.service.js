@@ -20,7 +20,7 @@ const sendEmail = async (options) => {
 
         //2. Define Email Options
         const mailOptions = {
-            from: 'Cruise ride app',
+            from: 'Sos app',
             to: options.email,
             subject: options.subject,
             text: options.message,

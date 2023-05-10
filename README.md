@@ -1,4 +1,4 @@
-# CRUISE Ride-Hailing API    `still in development`
+# SOS API    `still in development`
 The Ride-Hailing API is a backend service that allows users to book and pay for rides using a mobile app. 
 This API was built using 
 - Node.js
@@ -36,18 +36,13 @@ This API was built using
 
 ## Installation and Setup
 
-1. Clone the repository:
+1. Install the dependencies
 ```
-git clone https://github.com/your-username/ride-hailing-api.git
-```
-
-2. Install the dependencies
-```
-cd cruise
+cd sos
 npm install
 ```
 
-3. Create a `.env.dev` file in the `/src` directory with the following contents
+2. Create a `.env.dev` file in the `/src` directory with the following contents
 ```makefile
 # Database
 MONGO_URI_DEV = mongodb://localhost:27017/mydatabase   # Your MongoDB connection string if you run `npm run dev`
@@ -122,11 +117,5 @@ These are some of the endpints provided by the API
   </tbody>
 </table>
 
-## API Documentation
-The full API documentation can be found [here](https://documenter.getpostman.com/view/20633788/2s93JwPhRx)
-
 
 ## Author
-- Author: Richie Moluno
-- Twitter: [@MolunoRichie](https://twitter.com/MolunoRichie)
-- Email: molunorichie@gmail.com

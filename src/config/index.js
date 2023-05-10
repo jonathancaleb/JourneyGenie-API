@@ -41,10 +41,12 @@ const EMAIL_HOST = process.env.EMAIL_HOST,
 
 /* CRYPTO */
 const CRYPTO_ALGORITHM = process.env.CRYPTO_ALGORITHM;
+console.log(process.env.CRYPTO_ALGORITHM);
 //const CRYPTO_PASSWORD = sabilacaleb,
 const CRYPTO_PASSWORD = process.env.CRYPTO_PASSWORD;
 console.log(process.env.CRYPTO_PASSWORD);
 const CRYPTO_IV = process.env.CRYPTO_IV;
+console.log(process.env.CRYPTO_IV);
 
 /* PAYSTACK */
 const PAYSTACK_SECRET_KEY = process.env.PAYSTACK_SECRET_KEY;
