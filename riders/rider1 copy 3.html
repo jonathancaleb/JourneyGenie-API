@@ -78,7 +78,7 @@
             socket.emit('message', "Hi from the client")
         })
 
-        const email = 'cruiserider29@gmail.com'
+        const email = 'JourneyGenierider29@gmail.com'
         const serverURL = 'http://localhost:5000/api/v1';
         function login() {
             axios.post(`${serverURL}/auth/login`, {
@@ -123,8 +123,8 @@
 
         callButton.addEventListener('click', async () => {
             console.log('Calling user')
-            const targetuser_email = 'cruiserider25@gmail.com'
-            const peer_id = '018412-lkasjd-f233u-42kj4-asd82-cruiserider29@gmail.com'
+            const targetuser_email = 'JourneyGenierider25@gmail.com'
+            const peer_id = '018412-lkasjd-f233u-42kj4-asd82-JourneyGenierider29@gmail.com'
             const data = { targetuser_email, peer_id }
 
             socket.emit('call:request', data)
@@ -201,7 +201,7 @@
                 callDialog.classList.remove('hide')
                 callDialog.classList.add('show')
 
-                data = { peer_id: '018412-lkasjd-f233u-42kj4-asd82-cruiserider29@gmail.com' }
+                data = { peer_id: '018412-lkasjd-f233u-42kj4-asd82-JourneyGenierider29@gmail.com' }
 
                 const acceptButton = document.querySelector('.accept-call');
                 const rejectButton = document.querySelector('.reject-call');
