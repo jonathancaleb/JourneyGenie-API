@@ -5,15 +5,15 @@ const { randomBytes } = require("crypto")
 
 
 const emails = [
-    "cruiserider9@gmail.com",
-    "cruiserider16@gmail.com",
-    "cruiserider15@gmail.com",
-    "cruiserider14@gmail.com",
-    "cruiserider13@gmail.com",
-    "cruiserider17@gmail.com"
+    "JourneyGenierider9@gmail.com",
+    "JourneyGenierider16@gmail.com",
+    "JourneyGenierider15@gmail.com",
+    "JourneyGenierider14@gmail.com",
+    "JourneyGenierider13@gmail.com",
+    "JourneyGenierider17@gmail.com"
 ]
 async function clear() {
-    await mongoose.connect('mongodb+srv://cruise_dev:Gai7zOKVv9dGkrgv@boayant.haz1j1c.mongodb.net/cruise_dev?retryWrites=true&w=majority', { useNewUrlParser: true, useUnifiedTopology: true })
+    await mongoose.connect('mongodb+srv://sabilacalebjonathan:nethanel@cluster0.mls7anb.mongodb.net/?retryWrites=true&w=majority', { useNewUrlParser: true, useUnifiedTopology: true })
 
     for (let i = 0; i < emails.length; i++) {
         const email = emails[i]
@@ -28,13 +28,13 @@ async function clear() {
 async function addRiders() {
     const data = {
         personal_details: {
-            firstname: "cruise",
+            firstname: "JourneyGenie",
             lastname: "rider",
             password: "testpassword",
-            phone: "+243325123423165",
-            address: "No 3, Ibeju Lekki, Lagos State, Nigeria",
-            city: "Lagos City",
-            state: "Lagos State",
+            phone: "+256750681731",
+            address: "Kampala",
+            city: "Kampala City",
+            state: "Kampala State",
             driver_license: "SDNF23R309342S023",
             taxi_license: "SKDFJ3304UER23R",
             referral: "BSDLK2233S"

@@ -13,7 +13,7 @@ const uploadtocloudinary = (filepath, name, data) => {
         const { folder, id } = data;
         const options = {
             use_filename: true,
-            folder: `Cruise/${folder}/${id}`,
+            folder: `JourneyGenie/${folder}/${id}`,
             public_id: name
         };
         return cloudinary.uploader.upload(filepath, options)

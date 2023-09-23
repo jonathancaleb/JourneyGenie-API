@@ -1,40 +1,5 @@
-# SOS API    `still in development`
-The Ride-Hailing API is a backend service that allows users to book and pay for rides using a mobile app. 
-This API was built using 
-- Node.js
-- Express.js 
-- MongoDB
-- Socket.io for realtime location updates and inapp phone calls
+# JourneyGenie-API   `still in development`
 
-//"dev": "cross-env NODE_ENV=dev node --trace-warnings ./src/server.js",
-
-## Key Features
-
-- Ride Booking: Users can easily book rides through the app, specifying their pick-up and drop-off locations, and the type of ride they need.
-- Driver Matching: The app uses location tracking to find nearby drivers and match them with riders who need a ride.
-- Real-time Location Tracking: The app tracks the real-time location of the rider and driver during the ride, allowing users to see the exact location of their driver and the estimated time of arrival.
-- In-app Payments: The app allows users to pay for their rides directly through the app, using a variety of payment methods.
-- Ratings and Reviews: Users can rate their drivers and leave reviews, helping to maintain high-quality service and ensuring the safety of all users.
-- Customer Support: The app provides a variety of customer support options, such as in-app chat or phone support, to address any issues or concerns users may have.
-- Driver Management: The app provides a dashboard for drivers to manage their rides and earnings, as well as access to features like navigation and turn-by-turn directions.
-- Trip History: The app allows users to view their ride history and receipts, providing an easy way to keep track of expenses and past trips.
-
-## Todo
-- Web page to show realtime location tracking
-- Customer support feature
-- Implement Google Map API to accurately calculate distance between rider and enduser
-- Estimated rider arrival time
-- Detailed project documentation
-
-
-## Requirements
-
-- Node.js v14.0.0 or higher
-- NPM v6.0.0 or higher
-- MongoDB v4.0.0 or higher
-- A valid Google Maps API key
-
-# SOS API
 *Still in development*
 
 The Ride-Hailing API is a backend service that allows users to book and pay for rides using a mobile app. This API was built using:

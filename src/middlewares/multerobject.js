@@ -16,7 +16,7 @@ var storage = multer.diskStorage({
     if (!file.originalname.match(/\.(jpg|jpeg|png)$/)) {
         return cb(new Error("Please upload an image."));
     }
-    cb(null, `${Date.now()}_CRUISE_${file.originalname}`);
+    cb(null, `${Date.now()}_JourneyGenie_${file.originalname}`);
     },
 });
 
