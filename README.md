@@ -37,7 +37,7 @@ The Ride-Hailing API is a backend service that allows users to book and pay for 
 
 1. **Install the Dependencies**
    ```bash
-   cd sos
+   cd folder
    npm install
    ```
 
@@ -85,4 +85,4 @@ The API is deployed and accessible at: [https://server-v1.onrender.com](https://
 Feel free to access and explore the endpoints provided by the API.
 
 ## Author
-*Your Name*
+Caleb
