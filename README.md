@@ -85,4 +85,4 @@ The API is deployed and accessible at: [https://server-v1.onrender.com](https://
 Feel free to access and explore the endpoints provided by the API.
 
 ## Author
-Caleb
+:8ball:Caleb
